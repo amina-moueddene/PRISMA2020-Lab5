@@ -6,6 +6,40 @@
 
 Ce dépôt refait la fusion et le dédoublonnage de la revue à partir des exports bruts, avec un script reproductible et une trace de chaque décision. Il met aussi en évidence **une erreur de dédoublonnage dans la version actuelle de la SLR** (section 9).
 
+![tests](https://github.com/amina-moueddene/PRISMA2020-Lab5/actions/workflows/tests.yml/badge.svg)
+
+## En bref
+
+**Technologies.** **Python 3 + pandas** pour la fusion et le dédoublonnage ; `difflib` (bibliothèque standard) pour la similarité des titres ; `unittest` pour les tests. Les données sont des **exports bibliographiques** (CSV Scopus, BibTeX WoS), pas une base relationnelle : le lab ne demande **pas de SQL**.
+
+**Résultat :** 215 notices → 70 doublons par DOI + 1 confirmé manuellement → **144 références uniques**. Ce résultat corrige la SLR, qui avait fusionné à tort une communication de conférence et l'article de revue de même titre (section 9).
+
+**Correspondance étapes → fichiers**
+
+| Étape du lab | Section | Fichiers |
+|---|---|---|
+| 1 Introduction | §1 | `README.md`, `requirements.txt` |
+| 2 Import et exploration | §2 | `scripts/deduplicate.py` (`read_scopus`, `read_wos`), `output/00_exploration.txt` |
+| 3 Harmonisation | §3 | `scripts/deduplicate.py`, `output/01_references_fusionnees_harmonisees.csv` |
+| 4 Normalisation titres / DOI | §4 | `normalize_title`, `normalize_doi`, `surnames` ; `tests/test_normalisation.py` |
+| 5 Priorité 1 : DOI | §5 | `scripts/deduplicate.py` (P1) |
+| 6 Titre normalisé | §6 | `scripts/deduplicate.py` (P2) |
+| 7 Similarité + auteurs | §7 | `scripts/deduplicate.py` (P3) |
+| 8 Vérification manuelle | §8 | `output/02_verification_manuelle.csv` |
+| 9 Doublon réel / distinct | §9 | `manual/manual_decisions.csv`, `tests/test_pipeline.py` (`TestPiegesEtape9`) |
+| 10 Suppression + provenance | §10 | `output/03_log_doublons_supprimes.csv` |
+| 11 Traçabilité PRISMA | §11 | `output/04_rapport_prisma.csv`, `output/06_controle_vs_SLR.txt` |
+| 12 Dataset final | §12 | `output/05_dataset_final_screening_public.csv` |
+| 13 Outils et alternatives | §13 | [`docs/etape13_outils_deduplication.md`](docs/etape13_outils_deduplication.md) |
+| 14 Vérification et défis | §14 | [`docs/etape14_verification_defis.md`](docs/etape14_verification_defis.md), `tests/test_pipeline.py` (`TestDefi1`) |
+
+**Tests** (21 tests, sans les exports bruts) : `python -m unittest discover -s tests -t . -v`
+- `test_normalisation.py` : titres (casse, ponctuation, accents, espace insécable, tiret long), DOI (4 formats de préfixe), noms d'auteurs Scopus et WoS, lecture du BibTeX, union-find ;
+- `test_pipeline.py` : pipeline complet sur des exports fictifs, dont le **défi 1** (R1 à R4) et les pièges de l'étape 9 ;
+- `test_resultats_publies.py` : cohérence des résultats publiés (215 − 71 = 144, chaque notice conservée ou journalisée, aucun DOI en double, provenance 71/47/26, chaque cas ambigu justifié).
+
+Ils sont exécutés automatiquement par GitHub Actions à chaque envoi (`.github/workflows/tests.yml`).
+
 ## Contenu du dépôt
 
 | Fichier | Rôle |
@@ -22,6 +56,10 @@ Ce dépôt refait la fusion et le dédoublonnage de la revue à partir des expor
 | `output/06_controle_vs_SLR.txt` | Comparaison avec le tableau de tri de la SLR |
 | `data/Screening_ledger_olive_PRISMA2020.csv` | Tableau de tri de la SLR (143 lignes), utilisé pour le contrôle |
 | `raw/README.md` | Où placer les exports bruts (non publiés) |
+| `docs/etape13_outils_deduplication.md` | Étape 13 détaillée : outils, traitement des cas ambigus par chaque outil, choix |
+| `docs/etape14_verification_defis.md` | Étape 14 détaillée : questions, défis 1 et 2, et tests qui les vérifient |
+| `tests/` | 21 tests automatiques |
+| `.github/workflows/tests.yml` | Exécution automatique des tests sur GitHub |
 
 Non publiés (voir `.gitignore`) : les exports bruts et les deux versions du dataset final qui contiennent les résumés (`05_dataset_final_screening.csv` et `.ris`). Les résumés appartiennent aux bases et leur diffusion publique est restreinte par leurs conditions d'utilisation.
 
@@ -110,7 +148,7 @@ C'est l'écart principal avec le code de l'énoncé, qui marque comme doublon **
 
 ## 7. Similarité des titres et comparaison des auteurs
 
-La similarité est calculée avec `difflib.SequenceMatcher` sur les titres normalisés de toutes les paires de groupes restants (environ 10 000 paires, calcul immédiat pour 145 groupes). Un filtre sur la longueur des titres évite les calculs inutiles. **Aucune paire supplémentaire** n'atteint les seuils de P3 : tous les cas ambigus avaient déjà été repérés en P2.
+La similarité est calculée avec `difflib.SequenceMatcher` sur les titres normalisés de toutes les paires de groupes restants (environ 10 000 paires, calcul immédiat pour 145 groupes). Un filtre évite les calculs inutiles : si 2 × (longueur du titre le plus court) / (somme des longueurs) est sous le seuil, la similarité ne peut pas l'atteindre. **Aucune paire supplémentaire** n'atteint les seuils de P3 : tous les cas ambigus avaient déjà été repérés en P2.
 
 Limite observée : la comparaison des auteurs dépend du format de la base. Dans les notices Scopus d'actes CEUR, les noms sont inversés (« Kostas B. » au lieu de « Blekos K. »), si bien que le premier auteur de SCO-069 devient `kostas` alors que celui de SCO-102 est `blekos`. Le critère automatique sur les auteurs aurait échoué ; c'est l'**identifiant d'auteur Scopus** (36738709800, identique dans les deux notices) qui a permis de conclure à la vérification manuelle.
 
@@ -206,6 +244,8 @@ Validation : 144 lignes ; 0 DOI dupliqué ; aucun titre vide ; `Bases` remplie p
 
 ## 13. Outils et alternatives
 
+Version détaillée : [`docs/etape13_outils_deduplication.md`](docs/etape13_outils_deduplication.md).
+
 | Outil | Avantages | Limites pour cette revue |
 |---|---|---|
 | Zotero | Gratuit ; fusion des doublons dans l'interface | Fusion manuelle notice par notice ; pas de journal exportable des décisions |
@@ -217,6 +257,8 @@ Validation : 144 lignes ; 0 DOI dupliqué ; aucun titre vide ; `Bases` remplie p
 Python a été choisi pour la reproductibilité : la même commande, à partir des mêmes exports, redonne exactement 215 → 71 → 144, et chaque suppression est justifiée dans un fichier. Pour un volume beaucoup plus grand, `rapidfuzz` remplacerait `difflib` pour la similarité.
 
 ## 14. Vérification et défis
+
+Version détaillée, avec les tests qui exécutent les défis : [`docs/etape14_verification_defis.md`](docs/etape14_verification_defis.md).
 
 **Q1. Pourquoi normaliser les titres avant de les comparer ?**
 Parce que la même publication est écrite différemment selon les bases, et qu'une comparaison exacte la compterait deux fois (faux négatif). Mesuré sur nos données : parmi les 70 paires Scopus/WoS de même DOI, **19 ont des titres bruts différents** ; après normalisation, il n'en reste que **2**. Exemples réels :

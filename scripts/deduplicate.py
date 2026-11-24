@@ -263,8 +263,8 @@ def main():
         ta, tb = rec.at[a, "Titre_norm"], rec.at[b, "Titre_norm"]
         if not ta or not tb:
             continue
-        # filtre rapide sur la longueur avant le calcul de similarité
-        if min(len(ta), len(tb)) / max(len(ta), len(tb)) < SIM_LOW:
+        # filtre rapide : la similarité ne peut pas dépasser 2*min/(la+lb), inutile de la calculer sinon
+        if 2 * min(len(ta), len(tb)) / (len(ta) + len(tb)) < SIM_LOW:
             continue
         sim = SequenceMatcher(None, ta, tb).ratio()
         if sim < SIM_LOW:
