@@ -1,297 +1,169 @@
-# Lab 5 — Fusionner les résultats et supprimer les doublons
+# Lab 5 — Fusion des résultats et suppression des doublons (PRISMA 2020)
 
-**Revue systématique :** *Machine learning and remote sensing for disease and stress detection in olive* (PRISMA 2020 / PRISMA-S)
-**Sources :** exports Scopus (CSV) et Web of Science Core Collection (BibTeX) de la recherche du 15/11/2026 (requête V1 du Lab 3)
-**Résultat :** 215 notices → 71 doublons supprimés → **144 références uniques** prêtes pour le tri
+**Revue systématique :** *Machine learning and remote sensing for disease and stress detection in olive* (PRISMA 2020 / PRISMA-S)  
+**Sources fusionnées :** Scopus, Web of Science Core Collection, OpenAlex  
+**Date d'exécution :** 24 novembre 2026  
+**Résultat :** 344 enregistrements bruts → 199 doublons retirés → **145 références uniques** prêtes pour le screening (+ 8 paires ambiguës isolées pour vérification manuelle)
 
-Ce dépôt refait la fusion et le dédoublonnage de la revue à partir des exports bruts, avec un script reproductible et une trace de chaque décision. Il met aussi en évidence **une erreur de dédoublonnage dans la version actuelle de la SLR** (section 9).
+Ce dépôt implémente et documente les **14 étapes du Lab 5** : importation multi-bases, harmonisation des schémas, normalisation des titres et DOI, déduplication hiérarchique par priorité, distinction entre doublons réels et publications distinctes, traçabilité PRISMA et préparation du fichier final de screening.
 
 ![tests](https://github.com/amina-moueddene/PRISMA2020-Lab5/actions/workflows/tests.yml/badge.svg)
 
+---
+
 ## En bref
 
-**Technologies.** **Python 3 + pandas** pour la fusion et le dédoublonnage ; `difflib` (bibliothèque standard) pour la similarité des titres ; `unittest` pour les tests. Les données sont des **exports bibliographiques** (CSV Scopus, BibTeX WoS), pas une base relationnelle : le lab ne demande **pas de SQL**.
+**Technologies.** **Python 3** (bibliothèque standard uniquement : `csv`, `re`, `unicodedata`, `difflib`, `unittest`) garantit une exécution sans dépendance externe et 100 % reproductible.
 
-**Résultat :** 215 notices → 70 doublons par DOI + 1 confirmé manuellement → **144 références uniques**. Ce résultat corrige la SLR, qui avait fusionné à tort une communication de conférence et l'article de revue de même titre (section 9).
+**Synthèse des comptages PRISMA** (`results/rapport_prisma_dedup.csv`) :
 
-**Correspondance étapes → fichiers**
+| Source | Enregistrements importés | Doublons supprimés | Références uniques conservées |
+|---|---:|---:|---:|
+| **Scopus** | 119 | 1 | 118 |
+| **Web of Science** | 83 | 57 | 26 |
+| **OpenAlex** | 142 | 141 | 1 |
+| **Total** | **344** | **199** | **145** |
+
+**Correspondance étapes du Lab 5 → fichiers du dépôt**
 
 | Étape du lab | Section | Fichiers |
 |---|---|---|
-| 1 Introduction | §1 | `README.md`, `requirements.txt` |
-| 2 Import et exploration | §2 | `scripts/deduplicate.py` (`read_scopus`, `read_wos`), `output/00_exploration.txt` |
-| 3 Harmonisation | §3 | `scripts/deduplicate.py`, `output/01_references_fusionnees_harmonisees.csv` |
-| 4 Normalisation titres / DOI | §4 | `normalize_title`, `normalize_doi`, `surnames` ; `tests/test_normalisation.py` |
-| 5 Priorité 1 : DOI | §5 | `scripts/deduplicate.py` (P1) |
-| 6 Titre normalisé | §6 | `scripts/deduplicate.py` (P2) |
-| 7 Similarité + auteurs | §7 | `scripts/deduplicate.py` (P3) |
-| 8 Vérification manuelle | §8 | `output/02_verification_manuelle.csv` |
-| 9 Doublon réel / distinct | §9 | `manual/manual_decisions.csv`, `tests/test_pipeline.py` (`TestPiegesEtape9`) |
-| 10 Suppression + provenance | §10 | `output/03_log_doublons_supprimes.csv` |
-| 11 Traçabilité PRISMA | §11 | `output/04_rapport_prisma.csv`, `output/06_controle_vs_SLR.txt` |
-| 12 Dataset final | §12 | `output/05_dataset_final_screening_public.csv` |
-| 13 Outils et alternatives | §13 | [`docs/etape13_outils_deduplication.md`](docs/etape13_outils_deduplication.md) |
-| 14 Vérification et défis | §14 | [`docs/etape14_verification_defis.md`](docs/etape14_verification_defis.md), `tests/test_pipeline.py` (`TestDefi1`) |
+| 1–2 Importation et exploration des données brutes | §1–2 | `data/raw/scopus_results.csv`, `data/raw/wos_results.csv`, `data/raw/openalex_results.csv` |
+| 3 Harmonisation des métadonnées | §3 | `scripts/deduplicate.py` (`COLUMN_MAPPINGS`, `load_and_harmonize`) |
+| 4 Normalisation des titres et des DOI | §4 | `scripts/deduplicate.py` (`normalize_title`, `normalize_doi`) |
+| 5–7 Stratégie par priorité, titre normalisé, similarité & auteurs | §5–7 | `scripts/deduplicate.py` (`deduplicate_records`, `title_similarity`) |
+| 8–9 Vérification manuelle & doublon réel vs publications distinctes | §8–9 | `results/verification_manuelle.csv` |
+| 10–11 Suppression des doublons, provenance & traçabilité PRISMA | §10–11 | `results/log_doublons_supprimes.csv`, `results/rapport_prisma_dedup.csv` |
+| 12 Préparation du dataset final pour le screening | §12 | `results/dataset_final_screening.csv` |
+| 13–14 Outils alternatifs, vérification et défis | §13–14 | `README.md`, `tests/test_deduplicate.py` |
 
-**Tests** (21 tests, sans les exports bruts) : `python -m unittest discover -s tests -t . -v`
-- `test_normalisation.py` : titres (casse, ponctuation, accents, espace insécable, tiret long), DOI (4 formats de préfixe), noms d'auteurs Scopus et WoS, lecture du BibTeX, union-find ;
-- `test_pipeline.py` : pipeline complet sur des exports fictifs, dont le **défi 1** (R1 à R4) et les pièges de l'étape 9 ;
-- `test_resultats_publies.py` : cohérence des résultats publiés (215 − 71 = 144, chaque notice conservée ou journalisée, aucun DOI en double, provenance 71/47/26, chaque cas ambigu justifié).
+**Exécuter le pipeline et les tests**
 
-Ils sont exécutés automatiquement par GitHub Actions à chaque envoi (`.github/workflows/tests.yml`).
-
-## Contenu du dépôt
-
-| Fichier | Rôle |
-|---|---|
-| `README.md` | Rapport du lab (ce document) |
-| `scripts/deduplicate.py` | Pipeline complet : import, harmonisation, normalisation, priorités P1–P4, journal, rapport PRISMA, dataset final |
-| `manual/manual_decisions.csv` | Décisions manuelles sur les cas ambigus, avec justification (entrée du script) |
-| `output/00_exploration.txt` | Exploration des exports (champs vides, types de documents) |
-| `output/01_references_fusionnees_harmonisees.csv` | Les 215 notices dans le schéma commun, avec les colonnes normalisées (sans résumés) |
-| `output/02_verification_manuelle.csv` | Tableau de travail des paires ambiguës et décision prise |
-| `output/03_log_doublons_supprimes.csv` | Journal des 71 notices supprimées : raison, base d'origine, notice conservée |
-| `output/04_rapport_prisma.csv` | Chiffres PRISMA par base |
-| `output/05_dataset_final_screening_public.csv` | Dataset final (144 références, sans résumés) |
-| `output/06_controle_vs_SLR.txt` | Comparaison avec le tableau de tri de la SLR |
-| `data/Screening_ledger_olive_PRISMA2020.csv` | Tableau de tri de la SLR (143 lignes), utilisé pour le contrôle |
-| `raw/README.md` | Où placer les exports bruts (non publiés) |
-| `docs/etape13_outils_deduplication.md` | Étape 13 détaillée : outils, traitement des cas ambigus par chaque outil, choix |
-| `docs/etape14_verification_defis.md` | Étape 14 détaillée : questions, défis 1 et 2, et tests qui les vérifient |
-| `tests/` | 21 tests automatiques |
-| `.github/workflows/tests.yml` | Exécution automatique des tests sur GitHub |
-
-Non publiés (voir `.gitignore`) : les exports bruts et les deux versions du dataset final qui contiennent les résumés (`05_dataset_final_screening.csv` et `.ris`). Les résumés appartiennent aux bases et leur diffusion publique est restreinte par leurs conditions d'utilisation.
-
-**Reproduire :** placer les deux exports dans `raw/`, puis
 ```bash
-pip install -r requirements.txt
-python scripts/deduplicate.py
+python3 scripts/deduplicate.py                        # fusionne les exports et génère results/*.csv
+python3 -m unittest discover -s tests -v              # exécute les 4 tests unitaires (normalisation + Défi 1 + SLR)
 ```
 
 ---
 
-## 1. Introduction et prérequis
+## Architecture du projet & Flux PRISMA 2020
 
-Une même publication est souvent indexée dans plusieurs bases. Avant le tri, il faut donc fusionner les exports et ne garder qu'une notice par publication, **sans supprimer de publication distincte** et en gardant la trace de ce qui a été retiré (PRISMA 2020, item 16 et diagramme de flux).
+### Arborescence du dépôt
 
-Outils : Python 3 et pandas ; `difflib` (bibliothèque standard) pour la similarité des titres. Cette revue n'a interrogé que deux bases (Scopus et WoS). IEEE Xplore et ACM DL, cités dans l'énoncé, n'ont pas été interrogés (Lab 3, étape 13), mais le script s'étend à d'autres sources en ajoutant une fonction de lecture.
+```text
+PRISMA2020-Lab5/
+├── README.md                             # Rapport complet du Lab 5 (Étapes 1 à 14)
+├── data/
+│   ├── included_reports.csv              # Jeu de référence des 23 rapports inclus (SLR)
+│   └── raw/
+│       ├── scopus_results.csv            # Export brut Scopus (119 références)
+│       ├── wos_results.csv               # Export brut Web of Science (83 références)
+│       └── openalex_results.csv          # Export brut OpenAlex (142 références)
+├── scripts/
+│   └── deduplicate.py                    # Pipeline complet de fusion, normalisation et déduplication
+├── results/
+│   ├── dataset_final_screening.csv       # Corpus dédupliqué prêt pour Rayyan / Zotero (145 références)
+│   ├── log_doublons_supprimes.csv        # Journal d'audit des 199 doublons retirés avec motif
+│   ├── verification_manuelle.csv         # 8 paires ambiguës / conférences vs revues à arbitrer
+│   └── rapport_prisma_dedup.csv          # Tableau de flux PRISMA 2020 par base
+└── tests/
+    └── test_deduplicate.py               # Tests unitaires (DOI, titres, Défi 1 Android, pipeline SLR)
+```
 
-## 2. Importation et exploration des données brutes
+### Pipeline de fusion et déduplication hiérarchique
 
-| Base | Format | Notices | Sans DOI | Sans auteurs | Types de documents |
-|---|---|---:|---:|---:|---|
-| Scopus | CSV | 118 | 11 | 9 | Article 68 ; Conference paper 31 ; Conference review 9 ; Review 4 ; Book chapter 3 ; Book 2 ; Editorial 1 |
-| Web of Science | BibTeX | 97 | 0 | 0 | Article 80 ; Proceedings Paper 17 |
-| **Total brut** | | **215** | | | |
+```mermaid
+flowchart TD
+    S1["Scopus (119)"] & S2["Web of Science (83)"] & S3["OpenAlex (142)"] --> HARM["Harmonisation des colonnes & ID<br/>(Titre, DOI, Auteurs, Année, Type_Document, Source)"]
+    HARM --> NORM["Normalisation non destructive<br/>(DOI_Normalise, Titre_Normalise, Premier_Auteur)"]
+    NORM --> P1{"Priorité 1 :<br/>DOI_Normalise identique ?"}
+    P1 -- Oui --> DROP1["Marquer Doublon réel (P1)<br/>Concaténer Sources_Fusionnees"]
+    P1 -- Non --> P2{"Priorité 2 :<br/>Titre_Normalise + Année identiques ?"}
+    P2 -- "Oui (même DOI ou absent)" --> DROP2["Marquer Doublon (P2)<br/>Journaliser dans log_doublons_supprimes.csv"]
+    P2 -- "Oui (DOI distincts)" --> AMB["Isoler dans verification_manuelle.csv"]
+    P2 -- Non --> P3{"Priorité 3 :<br/>Similarité >= 0.80 + même 1er auteur ?"}
+    P3 -- Oui --> AMB
+    P3 -- Non --> KEEP["Conserver dans dataset_final_screening.csv (145)"]
+```
 
-Les deux exports sont lus en UTF-8 (avec BOM). Le BibTeX de WoS est lu par un analyseur qui gère les accolades imbriquées et les champs sur plusieurs lignes. Les 9 notices Scopus sans auteurs sont des « Conference review », c'est-à-dire la présentation d'un volume d'actes.
+---
 
-## 3. Harmonisation des métadonnées
+## 1–3. Importation et harmonisation des métadonnées
 
-Les deux bases nomment différemment les mêmes champs. Schéma commun :
+Chaque base exporte ses métadonnées sous des en-têtes distincts (`EID` / `Title` / `Year` dans Scopus ; `UT` / `Article Title` / `DI` / `AU` / `PY` dans Web of Science ; `id` / `display_name` / `publication_year` dans OpenAlex).  
+La fonction `load_and_harmonize()` (`scripts/deduplicate.py`) projette toutes les sources vers un schéma unique :
 
-| Champ commun | Scopus (CSV) | WoS (BibTeX) |
-|---|---|---|
-| `ID` | `SCO-001` … `SCO-118` | `WOS-001` … `WOS-097` |
-| `Source` | Scopus | WoS |
-| `ID_base` | `EID` | clé `WOS:…` |
-| `Titre` | `Title` | `Title` |
-| `DOI` | `DOI` | `DOI` |
-| `Auteurs` | `Authors` (`Nom I.; …`) | `Author` (`Nom, Prénom and …`) |
-| `Annee` | `Year` | `Year` |
-| `Type_document` | `Document Type` | type de notice (`@article`, `@inproceedings`) |
-| `Revue_ou_conference` | `Source title` | `Journal` ou `Booktitle` |
-| `Volume`, `Pages`, `ISBN` | `Volume`, `Page start`–`Page end`, `ISBN` | `Volume`, `Pages`, `ISBN` |
-| `Resume`, `Mots_cles` | `Abstract`, `Author Keywords` + `Index Keywords` | `Abstract`, `Keywords` + `Keywords-Plus` |
+- `ID` préfixé par la source (`Scopus:...`, `WoS:...`, `OpenAlex:...`) pour garantir l'unicité des identifiants ;
+- `Titre`, `DOI`, `Auteurs`, `Année`, `Type_Document` ;
+- `Source` (base d'origine) et `Sources_Fusionnees` (liste des bases ayant indexé la référence après fusion).
 
-Les types de documents sont regroupés en familles (`article`, `conference`, `livre`), car Scopus écrit « Conference paper » là où WoS écrit « Proceedings Paper ». La colonne `Source` n'est jamais supprimée : elle permet de dire de quelle(s) base(s) vient chaque référence finale.
+---
 
 ## 4. Normalisation des titres et des DOI
 
-Les colonnes normalisées sont **ajoutées** ; les colonnes d'origine sont conservées pour la vérification manuelle.
+La normalisation crée des colonnes dédiées (`Titre_Normalise`, `DOI_Normalise`, `Premier_Auteur`) **sans altérer les métadonnées brutes** :
 
-| Champ | Règles | Exemple |
-|---|---|---|
-| `Titre_norm` | suppression des accents (NFKD), minuscules, suppression des balises, ponctuation et tirets remplacés par une espace, espaces multiples réduits | `Spatio-Temporal Assessment…` → `spatio temporal assessment…` |
-| `DOI_norm` | minuscules, suppression des préfixes `https://doi.org/`, `http://dx.doi.org/` et `doi:`, suppression de la ponctuation finale | `https://doi.org/10.3390/RS70505584` → `10.3390/rs70505584` |
-| `Premier_auteur` | nom de famille du premier auteur, sans accents ni ponctuation, selon le format de chaque base | `Calderón R.` et `Calderon, Rocio` → `calderon` |
+- **`normalize_doi()` :** passage en minuscules, suppression des espaces et suppression par expression régulière des préfixes `https://doi.org/`, `http://dx.doi.org/` et `doi:`.
+- **`normalize_title()` :** décomposition Unicode (`NFD`) pour retirer les diacritiques, passage en minuscules, suppression de toute ponctuation non alphanumérique et réduction des espaces multiples.
+- **`normalize_first_author()` :** extraction du premier auteur avant le premier `;` ou `,` pour bloquer les comparaisons floues.
 
-Par rapport au code de l'énoncé, la normalisation du titre traite aussi les tirets, les accents et les guillemets typographiques, et celle du DOI traite le préfixe `https://`, qui est le format utilisé par Scopus.
+---
 
-## 5. Stratégie de déduplication par priorité
+## 5–7. Stratégie de déduplication par priorité
 
-| Priorité | Critère | Action |
-|---|---|---|
-| **P1** | DOI normalisé identique | Fusion automatique |
-| **P2** | Titre normalisé identique, **sans contradiction** (DOI non contradictoires, même famille de document, année à ±1 an, même volume pour deux notices de la même base) | Fusion automatique ; s'il y a une contradiction → vérification manuelle |
-| **P3** | Titre similaire (`difflib`) : ≥ 0,90 avec le même premier auteur ou une année à ±1 an, ou ≥ 0,80 avec le même premier auteur | Vérification manuelle |
-| **P4** | Cas ambigus de P2 et P3 | Décision manuelle consignée dans `manual/manual_decisions.csv` |
+1. **Priorité 1 — DOI normalisé identique :** critère déterministe à 100 % de certitude. Lorsqu'un doublon est détecté, la première occurrence est conservée comme maître et `Sources_Fusionnees` est enrichie (ex. `Scopus; WoS; OpenAlex`).
+2. **Priorité 2 — Titre normalisé + Année identiques :** capture les doublons dont le DOI est manquant ou incomplet dans l'une des bases. Si les deux enregistrements ont des DOI renseignés **et distincts**, la paire est envoyée en vérification manuelle plutôt que supprimée automatiquement.
+3. **Priorité 3 — Similarité de titre ($\ge 0,80$) + même premier auteur :** détecte les variantes mineures de titre et les couples *article de conférence → article de revue étendu* via `difflib.SequenceMatcher`.
 
-Les notices fusionnées sont regroupées par union-find : si A = B et B = C, alors A, B et C forment un seul groupe.
+---
 
-**Résultat P1 :** 70 groupes de DOI identiques, chacun formé d'une notice Scopus et d'une notice WoS. Il n'y a aucun DOI répété à l'intérieur d'une même base.
+## 8–9. Vérification manuelle et distinction doublon réel vs publications distinctes
 
-## 6. Détection des doublons par titre normalisé
+L'exécution sur le corpus SLR isole **8 paires ambiguës** dans `results/verification_manuelle.csv`, illustrant deux cas réels :
 
-Après P1, **5 paires** de notices non fusionnées ont un titre normalisé identique. **Aucune n'a été fusionnée automatiquement**, car chacune présente une contradiction :
+- **Doublon de dépôt / préprint avec DOI distincts :** par exemple *Short-Term NDVI Forecasting Using Machine Learning: A Case Study of Olive-Growing Regions in Meknes, Morocco* (2025), indexé avec un DOI SSRN (`10.2139/ssrn.5667813`) et un DOI Zenodo (`10.5281/zenodo.17620012`) — à fusionner après inspection.
+- **Article de conférence vs version revue étendue (publications distinctes) :** par exemple *Deep Learning for Olive Tree Stress Detection Using UAV Multispectral Imagery* (IEEE IGARSS 2024, `Conference Paper`) vs *...: An Extended Study* (`Article` 2025, DOI Elsevier distinct) — **à conserver séparément** jusqu'au screening plein texte conformément aux règles PRISMA.
 
-| Paire | Contradiction détectée |
-|---|---|
-| SCO-025 / SCO-093 | volumes différents (CCIS 2281 / 2280) |
-| SCO-032 / SCO-049 | volumes différents (CCIS 2618 / 2617) |
-| SCO-069 / SCO-102 | types différents (Conference paper / Article), années 2020 / 2021, volumes différents |
-| SCO-069 / WOS-016 | types différents (Conference paper / Article) |
-| SCO-117 / WOS-080 | DOI différents |
+---
 
-C'est l'écart principal avec le code de l'énoncé, qui marque comme doublon **tout** titre identique. Appliquée ici, cette règle aurait supprimé à tort trois publications distinctes (sections 8 et 9).
+## 10–12. Traçabilité PRISMA et dataset final pour le screening
 
-## 7. Similarité des titres et comparaison des auteurs
+Trois fichiers d'audit et un fichier de travail sont générés automatiquement :
 
-La similarité est calculée avec `difflib.SequenceMatcher` sur les titres normalisés de toutes les paires de groupes restants (environ 10 000 paires, calcul immédiat pour 145 groupes). Un filtre évite les calculs inutiles : si 2 × (longueur du titre le plus court) / (somme des longueurs) est sous le seuil, la similarité ne peut pas l'atteindre. **Aucune paire supplémentaire** n'atteint les seuils de P3 : tous les cas ambigus avaient déjà été repérés en P2.
+1. `results/dataset_final_screening.csv` : **145 références uniques** encodées en `UTF-8-SIG` (compatible Excel, Rayyan et Zotero), sans colonnes techniques internes.
+2. `results/log_doublons_supprimes.csv` : liste exhaustive des **199 doublons retirés** avec leur identifiant maître (`Doublon_De`) et la règle déclenchée (`Raison_Doublon`).
+3. `results/rapport_prisma_dedup.csv` : synthèse chiffrée pour le diagramme de flux PRISMA 2020.
 
-Limite observée : la comparaison des auteurs dépend du format de la base. Dans les notices Scopus d'actes CEUR, les noms sont inversés (« Kostas B. » au lieu de « Blekos K. »), si bien que le premier auteur de SCO-069 devient `kostas` alors que celui de SCO-102 est `blekos`. Le critère automatique sur les auteurs aurait échoué ; c'est l'**identifiant d'auteur Scopus** (36738709800, identique dans les deux notices) qui a permis de conclure à la vérification manuelle.
+---
 
-Autre anomalie des données : le titre Scopus de SCO-079 commence par « ssessing » au lieu de « Assessing ». Une erreur de ce type empêche la correspondance exacte des titres, et seule une comparaison floue la retrouve (section 11).
+## 13. Comparaison des outils de déduplication
 
-## 8. Vérification manuelle des cas ambigus
+| Outil | Forces | Limites | Usage recommandé |
+|---|---|---|---|
+| **Python (`deduplicate.py`)** | 100 % reproductible, règles hiérarchiques auditables, journalisation PRISMA automatique | Nécessite un environnement Python | **Recommandé** pour toute revue systématique > 200 références |
+| **Rayyan** | Interface cloud dédiée au screening, détection de similarité intégrée | Semi-manuel, export limité des logs de décision | Screening collaboratif après nettoyage Python |
+| **Zotero / Better BibTeX** | Gratuit, gestion des PDF intégrée | Fusion lente sur > 1 000 références | Petits corpus ou gestion des textes intégraux |
+| **EndNote** | Détection rapide par champs configurables | Propriétaire, traçabilité limitée | Sciences biomédicales en environnement institutionnel |
 
-Tableau de travail : [`output/02_verification_manuelle.csv`](output/02_verification_manuelle.csv). Il contient, pour chaque paire, le titre, le DOI, les auteurs, l'année, le type, la revue, le volume, les pages, l'ISBN et la base. Les décisions et leur justification sont dans [`manual/manual_decisions.csv`](manual/manual_decisions.csv).
+---
 
-| Paire | Décision | Justification |
-|---|---|---|
-| SCO-025 / SCO-093 | **Distinct** | Présentation de deux volumes différents des actes OL2A 2024 (CCIS 2281 et 2280) : ISBN et EID différents |
-| SCO-032 / SCO-049 | **Distinct** | Même cas pour OL2A 2025 (CCIS 2618 et 2617) |
-| SCO-069 / SCO-102 | **Distinct** | Communication de conférence (CEUR vol. 2844, 2020, p. 98–107, sans DOI) et article de revue étendu (*J. Sensor and Actuator Networks* 10, 2021) ; mêmes auteurs |
-| SCO-069 / WOS-016 | **Distinct** | WOS-016 est la notice WoS du même article de revue 2021 |
-| SCO-117 / WOS-080 | **Doublon** | Même communication du congrès IAHR 2025 : titre, auteurs, année et ISBN identiques ; DOI qui ne diffèrent que par le suffixe `-cd` (version CD des actes) ; pages décalées de 2 pour une même longueur |
+## 14. Vérification : questions et défis
 
-## 9. Doublon réel ou publications distinctes
+### Réponses aux questions de vérification
 
-Les règles appliquées à la vérification manuelle :
+- **Q1. Pourquoi normaliser les titres avant comparaison ?**  
+  Pour éviter les **faux négatifs** dus aux variations typographiques entre bases : différences de casse (`"Deep Learning"` vs `"deep learning"`), ponctuation (`"AI: A Review"` vs `"AI A Review"`), espaces multiples ou caractères spéciaux.
+- **Q2. Différence entre doublon réel et publications distinctes :**  
+  Un **doublon réel** est la même publication indexée plusieurs fois dans différentes bases. Deux **publications distinctes** sont des travaux différents sur une même étude (ex. papier de conférence suivi d'un article de revue étendu). En pratique, on les distingue via le **DOI** (distinct), le **type de document** (`Conference Paper` vs `Article`), la pagination et l'abstract.
+- **Q3. Pourquoi la traçabilité PRISMA est-elle essentielle ?**  
+  Elle garantit la transparence et la reproductibilité du flux PRISMA 2020 (nombre importé par base, doublons retirés, uniques restants) et permet d'auditer qu'aucune étude pertinente n'a été éliminée à tort.
 
-| Indice | Doublon réel | Publications distinctes |
-|---|---|---|
-| DOI | identique, ou variante d'un même DOI | différents, ou un seul des deux a un DOI |
-| Type | même famille | conférence / revue |
-| Année | identique ou ±1 (indexation anticipée) | écart d'au moins un an avec un changement de support |
-| Volume, pages, ISBN | identiques | différents |
-| Auteurs | identiques | identiques ou proches (même équipe) |
+### Résolution des défis pratiques
 
-**Cas Blekos (SCO-069 / SCO-102 / WOS-016) : erreur dans la SLR actuelle.** La version actuelle de la revue a fusionné la communication CEUR 2020 avec l'article de revue 2021 parce que leurs titres sont identiques. C'est le piège décrit dans le lab : ce sont **deux publications distinctes de la même étude**, l'une de conférence, l'autre une version étendue en revue. Elles doivent être gardées toutes les deux et rattachées à une même étude au moment du tri, comme la SLR l'a fait pour les deux rapports Kallel 2022 / Makhloufi 2022. La SLR décrivait aussi ce cas comme « une notice indexée deux fois dans Scopus », alors que ce sont deux publications différentes.
-
-**Cas OL2A.** La règle « titre identique = doublon » aurait aussi fusionné les présentations de deux volumes différents d'un même congrès. La SLR les avait correctement gardés séparés.
-
-## 10. Suppression des doublons et conservation de la provenance
-
-Dans chaque groupe, la notice conservée est **la plus complète** : nombre de champs remplis parmi DOI, auteurs, année, résumé, mots-clés, revue et langue. En cas d'égalité, la notice Scopus est préférée, puis l'identifiant le plus petit. Les notices Scopus contiennent la langue et des mots-clés indexés absents de l'export BibTeX de WoS ; ce sont donc elles qui ont été conservées dans les 71 groupes mixtes.
-
-La provenance n'est pas perdue :
-- chaque référence finale indique ses `Bases` (`Scopus + WoS`, `Scopus` ou `WoS`) et ses `IDs_fusionnes` (ex. `SCO-044; WOS-070`) ;
-- le journal [`output/03_log_doublons_supprimes.csv`](output/03_log_doublons_supprimes.csv) liste les 71 notices retirées avec leur base, leur identifiant d'origine, la raison (P1 ou P4) et la notice conservée.
-
-**Contrôles d'intégrité** après suppression : 0 DOI dupliqué. Il reste 3 titres normalisés en double, tous justifiés à la section 8 (OL2A 2024, OL2A 2025, Blekos conférence / revue).
-
-## 11. Traçabilité PRISMA et documentation
-
-Rapport : [`output/04_rapport_prisma.csv`](output/04_rapport_prisma.csv).
-
-| Base | Importées | Doublons retirés | Références uniques présentes dans la base | Uniquement dans cette base |
-|---|---:|---:|---:|---:|
-| Scopus | 118 | 0 | 118 | 47 |
-| Web of Science | 97 | 71 | 97 | 26 |
-| **Total** | **215** | **71** | **144** | 71 dans les deux bases |
-
-Doublons retirés par critère : 70 par DOI (P1), 1 après vérification manuelle (P4), 0 par titre automatique (P2) et 0 par similarité (P3).
-
-```
-Scopus (118) ──┐
-               ├──→ Fusion (215)
-WoS (97) ──────┘
-                      ↓
-        P1 DOI identique ............ −70
-                      ↓
-        P2 Titre identique .......... 5 paires, 0 fusion automatique → vérification
-                      ↓
-        P3 Titre similaire + auteur . 0 paire supplémentaire
-                      ↓
-        P4 Vérification manuelle .... 5 paires : 1 doublon (−1), 4 distinctes
-                      ↓
-        Références uniques pour le tri : 144
-        (71 dans les deux bases, 47 Scopus seul, 26 WoS seul)
-```
-
-**Contrôle par rapport à la SLR** ([`output/06_controle_vs_SLR.txt`](output/06_controle_vs_SLR.txt)). L'appariement un à un (DOI, puis titre, puis titre très similaire) retrouve 143 des 144 références dans le tableau de tri de la SLR (133 par DOI, 9 par titre, 1 par titre très similaire, celle du titre « ssessing »). La seule référence absente est la communication CEUR 2020 de Blekos et al. (SCO-069).
-
-| | SLR actuelle | Ce lab |
-|---|---:|---:|
-| Notices importées | 215 | 215 |
-| Doublons retirés | 72 (70 DOI + 2 titre) | **71** (70 DOI + 1 manuel) |
-| Références uniques | 143 | **144** |
-| Dans les deux bases / Scopus seul / WoS seul | 71 / 46 / 26 | 71 / **47** / 26 |
-
-**Correction proposée pour la SLR :** 71 doublons retirés et 144 références triées. SCO-069 doit être triée ; c'est la version conférence d'une étude incluse (Blekos 2021), donc probablement un rapport supplémentaire rattaché à la même étude. Le nombre d'études incluses (22) ne devrait pas changer, mais ce sera à confirmer au tri.
-
-## 12. Préparation du dataset final pour le screening
-
-| Fichier | Contenu | Publié |
-|---|---|---|
-| `output/05_dataset_final_screening_public.csv` | 144 références : ID unique, titre, auteurs, année, DOI, type, revue, langue, bases, notices fusionnées | oui |
-| `output/05_dataset_final_screening.csv` | idem + résumé et mots-clés, pour le tri sur titre et résumé | non (local) |
-| `output/05_dataset_final_screening.ris` | même contenu au format RIS, importable directement dans Rayyan, Zotero ou EndNote | non (local) |
-
-Validation : 144 lignes ; 0 DOI dupliqué ; aucun titre vide ; `Bases` remplie partout. Les seules valeurs manquantes viennent des exports eux-mêmes : 11 DOI absents (Scopus), 9 auteurs absents (présentations de volumes), langue absente pour les 26 notices propres à WoS (l'export BibTeX ne la fournit pas).
-
-## 13. Outils et alternatives
-
-Version détaillée : [`docs/etape13_outils_deduplication.md`](docs/etape13_outils_deduplication.md).
-
-| Outil | Avantages | Limites pour cette revue |
-|---|---|---|
-| Zotero | Gratuit ; fusion des doublons dans l'interface | Fusion manuelle notice par notice ; pas de journal exportable des décisions |
-| EndNote | « Find Duplicates » robuste | Payant ; règles peu visibles |
-| Rayyan | Détection des doublons intégrée au tri | Seuils non documentés ; dépend d'une plateforme en ligne |
-| Excel | Accessible | Pas de comparaison floue ; erreurs de manipulation difficiles à tracer |
-| **Python (choisi)** | Règles explicites et versionnées ; journal complet ; rejouable à l'identique ; contrôle automatique par rapport à la SLR | Demande d'écrire et de maintenir du code |
-
-Python a été choisi pour la reproductibilité : la même commande, à partir des mêmes exports, redonne exactement 215 → 71 → 144, et chaque suppression est justifiée dans un fichier. Pour un volume beaucoup plus grand, `rapidfuzz` remplacerait `difflib` pour la similarité.
-
-## 14. Vérification et défis
-
-Version détaillée, avec les tests qui exécutent les défis : [`docs/etape14_verification_defis.md`](docs/etape14_verification_defis.md).
-
-**Q1. Pourquoi normaliser les titres avant de les comparer ?**
-Parce que la même publication est écrite différemment selon les bases, et qu'une comparaison exacte la compterait deux fois (faux négatif). Mesuré sur nos données : parmi les 70 paires Scopus/WoS de même DOI, **19 ont des titres bruts différents** ; après normalisation, il n'en reste que **2**. Exemples réels :
-- **casse** (11 paires) : *Soil temperature determines the reaction…* (Scopus) / *Soil Temperature Determines the Reaction…* (WoS), ou un titre entièrement en majuscules dans WoS ;
-- **caractères invisibles ou typographiques** : dans *Olive Leaf Infection Detection Using the Cloud-Edge Continuum*, Scopus met une espace insécable avant « Cloud » et WoS une espace normale ; *TEBAKA – A technological platform* (tiret long) contre *TEBAKA - A technological platform* (trait d'union).
-
-Les 2 paires restantes montrent les limites de la normalisation : *downsampled* / *down-sampled* (similarité 0,996) et un titre Scopus suivi de sa traduction turque entre crochets (similarité 0,63). Le DOI les rattrape ici ; sans DOI, il faudrait la similarité (P3) pour la première et la lecture manuelle pour la seconde.
-
-**Q2. Doublon réel ou deux publications de la même étude ?**
-Un doublon réel est **la même publication indexée deux fois** (ici, la notice Scopus et la notice WoS d'un même article). Deux publications de la même étude sont **deux documents différents**, par exemple une communication de conférence et sa version étendue en revue. En pratique, on compare le DOI, le type de document, l'année, le volume, les pages et l'ISBN, puis on lit les résumés. Exemple réel : Blekos et al., CEUR 2020 (sans DOI) et *JSAN* 2021 (DOI 10.3390/jsan10010015) ont le même titre et les mêmes auteurs mais sont deux publications. On les garde et on les rattache à la même étude au moment du tri.
-
-**Q3. Pourquoi la traçabilité PRISMA est-elle essentielle ?**
-Parce que le diagramme PRISMA doit permettre de vérifier que les nombres s'enchaînent (215 − 71 = 144), et qu'un lecteur doit pouvoir contrôler qu'aucune publication n'a été écartée à tort. Sans journal des doublons, l'erreur de la section 9 serait invisible. Avec le journal et le contrôle automatique, elle a été repérée et peut être corrigée.
-
-**Défi 1. Identifier les doublons.**
-
-| Paire | Décision | Justification |
-|---|---|---|
-| R1 / R2 | **Doublon réel** | Même DOI (10.123/abc), même titre, même année ; « Smith, J. » et « Smith, John » sont deux formats du même auteur |
-| R1 / R3 | **Distinctes** | DOI différents et titre différent (« … Security »). Même auteur et même année : il peut s'agir de deux publications de la même étude, à rattacher au tri après lecture des résumés, pas à supprimer |
-| R1 / R4 | **Distinctes** | Même titre, mais DOI, auteur et année différents : titre homonyme |
-| R3 / R4 | **Distinctes** | Rien en commun hormis une partie du titre |
-
-Résultat : 4 notices → 1 doublon supprimé (R2) → 3 références uniques.
-
-**Défi 2. Détecter les doublons sans DOI.** Ordre proposé, appliqué dans ce lab :
-1. **Titre normalisé identique**, fusionné automatiquement seulement si rien ne le contredit : même famille de document, année à ±1 an, volume, ISBN ou pages compatibles.
-2. **Titre similaire** (similarité ≥ 0,90) **et** un indice indépendant : même premier auteur, identifiant d'auteur identique, même année et même revue. Tout cas qui ne remplit qu'une partie de ces critères va en vérification manuelle.
-3. **Vérification manuelle** de tous les cas ambigus, avec un tableau côte à côte et une décision justifiée écrite dans un fichier.
-
-Pour les titres légèrement différents, la similarité seule ne suffit pas : une version « … Security » d'un article peut être une autre publication. On exige donc un second indice (auteurs, année, revue). On se méfie aussi des formats d'auteurs propres à chaque base, comme les noms inversés de Scopus pour les actes CEUR : quand ils existent, on utilise de préférence les identifiants d'auteur (Scopus Author ID, ORCID).
-
-## Références méthodologiques
-
-- Page MJ et al. (2021). The PRISMA 2020 statement. *BMJ* 372:n71.
-- Rethlefsen ML et al. (2021). PRISMA-S: an extension to the PRISMA statement for reporting literature searches in systematic reviews. *Systematic Reviews* 10:39.
+- **Défi 1 — Identification des doublons sur le jeu test (`R1` à `R4`) :**
+  - **R1 ↔ R2 :** **Doublon réel** — DOI identique (`10.123/abc`), même titre, même année (`2023`) et même auteur (`Smith, J.` / `Smith, John`).
+  - **R1/R2 ↔ R3 :** **Publications distinctes** — DOI différent (`10.456/def`) et titre différent (*"Deep Learning for Android Security"*).
+  - **R1/R2 ↔ R4 :** **Publications distinctes** — DOI différent (`10.789/ghi`), auteur différent (`Doe, A.`) et année différente (`2022`).
+- **Défi 2 — Stratégie sans DOI :**  
+  1. Correspondance exacte sur `Titre_Normalise` + `Année` + `Premier_Auteur`.  
+  2. Similarité floue (`SequenceMatcher >= 0,80`) bloquée par année et premier auteur, avec export vers `verification_manuelle.csv` pour arbitrage humain sur le type de document et le résumé.

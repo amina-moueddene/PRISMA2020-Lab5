@@ -1,0 +1,24 @@
+record,first_author,year,database,doi,title
+2,Calderón,2015,Scopus and Web of Science,10.3390/rs70505584,Early Detection and Quantification of Verticillium Wilt in Olive Using Hyperspectral and Thermal Imagery over Large Areas
+6,Zarco-Tejada,2018,Scopus and Web of Science,10.1038/s41477-018-0189-7,Previsual symptoms of Xylella fastidiosa infection revealed in spectral plant-trait alterations
+9,Di Nisio,2020,Scopus and Web of Science,10.3390/s20174915,Fast Detection of Olive Trees Affected by Xylella Fastidiosa from UAVs Using Multispectral Imaging
+16,Blekos,2021,Scopus and Web of Science,10.3390/jsan10010015,"Analysis, Modeling and Multi-Spectral Sensing for the Predictive Management of Verticillium Wilt in Olive Groves"
+20,Castrignanò,2021,Scopus and Web of Science,10.3390/rs13010014,Semi-Automatic Method for Early Detection of Xylella fastidiosa in Olive Trees Using UAV Multispectral Imagery and Geostatistical-Discriminant Analysis
+28,Poblete,2021,Scopus and Web of Science,10.1016/j.isprsjprs.2021.07.014,Discriminating Xylella fastidiosa from Verticillium dahliae infections in olive trees using thermal- and hyperspectral-based plant traits
+33,Ksibi,2022,Scopus and Web of Science,10.3390/app122010278,MobiRes-Net: A Hybrid Deep Learning Model for Detecting and Classifying Olive Leaf Diseases
+35,Makhloufi,2022,Scopus and Web of Science,10.1109/igarss46834.2022.9883524,OLIVE TREE HEALTH MONITORING APPROACH USING SATELLITE IMAGES AND BASED ON ARTIFICIAL INTELLIGENCE: TOWARD AUTOMATIC OLIVE STRESS DETECTION SOLUTION
+37,Navrozidis,2022,Scopus and Web of Science,10.3390/rs14235947,Implementing Sentinel-2 Data and Machine Learning to Detect Plant Stress in Olive Groves
+43,Mamalis,2023,Scopus and Web of Science,10.3390/a16070343,Deep Learning for Detecting Verticillium Fungus in Olive Trees: Using YOLO in UAV Imagery
+45,Navrozidis,2023,Scopus and Web of Science,10.3390/rs15245683,Application of Machine Learning for Disease Detection Tasks in Olive Trees Using Hyperspectral Data
+46,Poblete,2023,Web of Science only,10.1016/j.rse.2023.113698,Detection of symptoms induced by vascular plant pathogens in tree crops using high-resolution satellite data: Modelling and assessment with airborne hyperspectral imagery
+53,Garofalo,2024,Scopus and Web of Science,10.3390/agronomy14010001,Prediction of Stem Water Potential in Olive Orchards Using High-Resolution Planet Satellite Images and Machine Learning Techniques
+64,Costanza,2025,Scopus and Web of Science,10.3390/app15052746,Predicting Olive Tree Chlorophyll Fluorescence Using Explainable AI with Sentinel-2 Imagery in Mediterranean Environment
+65,D'Addabbo,2025,Scopus and Web of Science,10.3390/rs17081372,Toward an Operational System for Automatically Detecting Xylella fastidiosa in Olive Groves Based on Hyperspectral and Thermal Remote Sensing Data
+73,Ottaviano,2025,Scopus and Web of Science,10.1117/12.3070202,Remote sensed images for prediction of Stem Water Potential in olive groves
+74,Oussaoui,2025,Scopus and Web of Science,10.1080/10106049.2025.2471104,Mapping drought severity impact on arboriculture systems over Tadla and lower Tassaout plains in Morocco using Sentinel-2 data and machine learning approaches
+83,Belwalkar,2026,Scopus and Web of Science,10.1109/lgrs.2026.3680303,Airborne Subnanometer Hyperspectral Imaging Reveals Early Biotic-Stress Symptoms via Fraunhofer Lines
+85,Daiz,2026,Scopus and Web of Science,10.3390/geomatics6040080,"Spatio-Temporal Assessment of Drought Impacts on Olive Groves Using Sentinel-2 and CHIRPS Data in Central Morocco: A Case Study of the Beni-Amir Perimeter, Central Morocco"
+93,Martínez-Ruedas,2026,Scopus and Web of Science,10.3390/s26196062,Machine Learning-Based Prediction of Stem Water Potential in Olive Orchards Using PlanetScope Imagery and Meteorological Data
+109,Kallel,2022,Scopus only,10.1145/3531056.3531070,Olive tree health monitoring approach using satellite images and based on Artificial Intelligence Satellite image for Olive tree health monitoring
+125,Raouhi,2024,Scopus only,10.11591/ijece.v14i1.pp891-903,Optimizing olive disease classification through transfer learning with unmanned aerial vehicle imagery
+137,El Atiq,2026,Scopus only,10.1051/bioconf/202621101006,Monitoring drought-induced degradation of olive and citrus tree crops in the Tadla plain (Morocco) with multi-sensor remote sensing
