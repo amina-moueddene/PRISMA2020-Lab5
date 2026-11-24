@@ -1,0 +1,15 @@
+== Scopus : 118 notices
+  Titre    vide : 0
+  DOI      vide : 11
+  Auteurs  vide : 9
+  Annee    vide : 0
+  Resume   vide : 0
+  Types : Article 68; Conference paper 31; Conference review 9; Review 4; Book chapter 3; Book 2; Editorial 1
+== WoS : 97 notices
+  Titre    vide : 0
+  DOI      vide : 0
+  Auteurs  vide : 0
+  Annee    vide : 0
+  Resume   vide : 0
+  Types : Article 80; Proceedings Paper 17
+== Total brut : 215

@@ -1,0 +1,11 @@
+Notices importées : 215 (Scopus 118, WoS 97)
+Doublons supprimés : 71
+  - P1 DOI identique : 70
+  - P4 Vérification manuelle : 1
+Références uniques : 144
+  dans les deux bases : 71 ; Scopus seul : 47 ; WoS seul : 26
+Doublons internes à une base : Scopus 0, WoS 0
+Paires à vérifier manuellement : 5 (dont sans décision : 0)
+DOI dupliqués restants : 0 ; titres normalisés dupliqués restants : 3
+Tableau de tri de la SLR : 143 lignes ; références uniques appariées une à une : 143/144 (DOI 133, titre 9, titre très similaire 1)
+  Absente du tableau de tri de la SLR : U012 (SCO-069, 2020, Conference paper) Analysis, modeling and multi-spectral sensing for the predictive management of v
