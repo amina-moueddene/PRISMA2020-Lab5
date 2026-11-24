@@ -93,7 +93,7 @@ def normalize_doi(doi: str) -> str:
         return ""
     text = str(doi).lower().strip()
     text = re.sub(r"^(https?://(dx\.)?doi\.org/|doi:\s*)", "", text)
-    return text.strip()
+    return text.rstrip(".,;)").strip()
 
 
 def normalize_first_author(authors: str) -> str:
