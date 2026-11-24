@@ -1,0 +1,20 @@
+name: Tests Lab 5 Deduplication
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run deduplication pipeline
+        run: python3 scripts/deduplicate.py
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
